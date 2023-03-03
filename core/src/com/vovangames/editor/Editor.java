@@ -88,11 +88,17 @@ public class Editor extends ApplicationAdapter implements InputProcessor {
 	}
 
 	private void readControls() {
-		if (Gdx.input.isKeyPressed(Input.Keys.W)) c.translate(0, c.zoom * 5);
-		if (Gdx.input.isKeyPressed(Input.Keys.A)) c.translate(-c.zoom * 5, 0);
-		if (Gdx.input.isKeyPressed(Input.Keys.S)) c.translate(0, -c.zoom * 5);
-		if (Gdx.input.isKeyPressed(Input.Keys.D)) c.translate(c.zoom * 5, 0);
+		if (Gdx.input.isKeyPressed(Input.Keys.W)) s.getCamera().translate(0, c.zoom * 5, 0);
+		if (Gdx.input.isKeyPressed(Input.Keys.A)) s.getCamera().translate(-c.zoom * 5, 0, 0);
+		if (Gdx.input.isKeyPressed(Input.Keys.S)) s.getCamera().translate(0, -c.zoom * 5, 0);
+		if (Gdx.input.isKeyPressed(Input.Keys.D)) s.getCamera().translate(c.zoom * 5, 0, 0);
+		if (Gdx.input.isKeyPressed(Input.Keys.R)) {
+			if (selected != null) selected.remove();
+			unselect();
+		}
 		if (Gdx.input.isKeyJustPressed(Input.Keys.Q)) {
+			arrowX.remove();
+			arrowY.remove();
 			StringBuilder b = new StringBuilder();
 			for (Actor a : s.getActors()) {
 				b.append(a.getX() + ";");
@@ -107,18 +113,20 @@ public class Editor extends ApplicationAdapter implements InputProcessor {
 			h.writeString(output, false);
 			System.out.println(h.path());
 		}
-		if (Gdx.input.isKeyPressed(Input.Keys.NUM_0)) c.position.set(0, 0, 0);
+		if (Gdx.input.isKeyPressed(Input.Keys.NUM_0)) s.getCamera().position.set(0, 0, 0);
 		if (Gdx.input.isKeyJustPressed(Input.Keys.L)) new Thread() {
 			@Override
 			public void run() {
 				JFileChooser chooser = new JFileChooser(Gdx.files.getExternalStoragePath());
-				FileFilter f = new FileNameExtensionFilter(".cmap file", ".cmap");
-				chooser.setFileFilter(f);
-				chooser.addChoosableFileFilter(f);
 				int code = chooser.showOpenDialog(null);
 				if (code == JFileChooser.APPROVE_OPTION)  {
 					String[] objects = Gdx.files.absolute(chooser.getSelectedFile().getAbsolutePath()).readString().split("\n");
 					System.out.println(objects[0]);
+					s.clear();
+					Array<Actor> load = load(Gdx.files.absolute(chooser.getSelectedFile().getAbsolutePath()));
+					for (Actor a : load) {
+						s.addActor(a);
+					}
 				}
 
 			}
@@ -126,10 +134,24 @@ public class Editor extends ApplicationAdapter implements InputProcessor {
 
 	}
 
+	public Array<Actor> load(FileHandle file) {
+		String s = file.readString();
+		String[] objects = s.split("\n");
+		Array<Actor> actors = new Array<>();
+		for (String object : objects) {
+			String[] params = object.split(";");
+			Image w = new Image(wall);
+			w.setSize(Float.parseFloat(params[2]), Float.parseFloat(params[3]));
+			w.setPosition(Float.parseFloat(params[0]), Float.parseFloat(params[1]));
+			actors.add(w);
+		}
+		return actors;
+	}
+
 	@Override
 	public void render () {
 		ScreenUtils.clear(0, 0, 0, 1);
-		debug.setText("Right click - new wall\nLeft click - select & drag\nSpacebar - shange mode(scale, move)\nQ - Save\nMouse wheel - zoom\n0 - set camera position to (0, 0)" + "FPS: " + Gdx.graphics.getFramesPerSecond());
+		debug.setText("Right click - new wall\nLeft click - select & drag\nSpacebar - shange mode(scale, move)\nQ - Save\nL - load a .cmap file\nMouse wheel and numpad +/- - zoom\n0 - set camera position to (0, 0)\nR - delete selected wall\n" + "FPS: " + Gdx.graphics.getFramesPerSecond());
 		if (selected != null) {
 			debug.setText(debug.getText() + "\n" + "X: " + selected.getX() + "\n" + "Y: " + selected.getY() + "\n" + "W: " + selected.getWidth() + "\n" + "H: " + selected.getHeight());
 		}
@@ -138,11 +160,22 @@ public class Editor extends ApplicationAdapter implements InputProcessor {
 		if (Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT) && s.hit(Gdx.input.getX(), Gdx.input.getY(), true) == null) {
 			addWall(Gdx.input.getX(),Gdx.graphics.getHeight() - Gdx.input.getY());
 		}
+		if (Gdx.input.isKeyPressed(Input.Keys.NUMPAD_ADD)) {
+			((OrthographicCamera)s.getCamera()).zoom += 0.01f;
+			arrowX.setScale(c.zoom);
+			arrowY.setScale(c.zoom);
+		}
+		if (Gdx.input.isKeyPressed(Input.Keys.NUMPAD_SUBTRACT)) {
+			((OrthographicCamera)s.getCamera()).zoom -= 0.01f;
+			arrowX.setScale(c.zoom);
+			arrowY.setScale(c.zoom);
+		}
 		readControls();
 	}
 
 	@Override
 	public void resize(int width, int height) {
+		c = (OrthographicCamera) s.getCamera();
 		c.viewportWidth = s.getCamera().viewportWidth = width;
 		c.viewportHeight = s.getCamera().viewportHeight = height;
 		Array<Actor> actors = s.getActors();
@@ -219,7 +252,7 @@ public class Editor extends ApplicationAdapter implements InputProcessor {
 
 	@Override
 	public boolean scrolled(float amountX, float amountY) {
-		c.zoom += amountY;
+		((OrthographicCamera)s.getCamera()).zoom += amountY;
 		arrowX.setScale(c.zoom);
 		arrowY.setScale(c.zoom);
 		return false;
